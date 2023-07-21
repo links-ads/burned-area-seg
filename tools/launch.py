@@ -7,13 +7,13 @@ from loguru import logger as log
 from mmengine import Config
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.loggers import TensorBoardLogger
-
+from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
 from baseg.datamodules import EMSDataModule
 from baseg.io import read_raster_profile, write_raster
 from baseg.modules import MultiTaskModule, SingleTaskModule
 from baseg.tiling import SmoothTiler
 from baseg.utils import exp_name_timestamp, find_best_checkpoint
+import logging
 
 cli = ArgParser()
 
@@ -76,6 +76,7 @@ def test(
     ),
     predict: bool = ArgField(default=False, description="Generate predictions on the test set."),
 ):
+
     log.info(f"Loading experiment from: {exp_path}")
     config_path = exp_path / "config.py"
     models_path = exp_path / "weights"
@@ -115,14 +116,16 @@ def test(
     module_class = MultiTaskModule if "aux_classes" in model_config["decode_head"] else SingleTaskModule
     module = module_class.load_from_checkpoint(checkpoint, **module_opts)
 
-    logger = TensorBoardLogger(save_dir="outputs", name=config["name"], version=exp_path.stem)
+    logger1 = TensorBoardLogger(save_dir="outputs", name=config["name"], version=exp_path.stem)
+    logger2 = CSVLogger(save_dir="outputs", name=config["name"], version=exp_path.stem)
+
     if predict:
         log.info("Generating predictions...")
         trainer = Trainer(**config["evaluation"], logger=False)
         trainer.predict(module, datamodule=datamodule, return_predictions=False)
     else:
         log.info("Starting the testing...")
-        trainer = Trainer(**config["evaluation"], logger=logger)
+        trainer = Trainer(**config["evaluation"], logger=[logger1, logger2])
         trainer.test(module, datamodule=datamodule)
 
 
@@ -163,7 +166,7 @@ def test_multi(
                 continue
             checkpoint = checkpoint[0]
 
-        test.callback(exp_path, checkpoint=checkpoint)
+        test.callback(exp_path, checkpoint=checkpoint, predict=False)
 
 
 def process_inference(

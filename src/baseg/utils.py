@@ -1,6 +1,6 @@
 from datetime import datetime
 from pathlib import Path
-
+import numpy as np
 
 def exp_name_timestamp(name: str) -> str:
     """Generates a name for the experiment starting with the given name and
@@ -41,3 +41,10 @@ def find_best_checkpoint(ckpt_path: Path, metric: str, mode: str = "min") -> Pat
             best_value = value
     assert best_ckpt is not None, f"No checkpoint found in: {ckpt_path}"
     return best_ckpt
+
+
+def mask2rgb(image: np.ndarray, palette: dict) -> np.ndarray:
+    lut = np.zeros((256, 3), dtype=np.uint8)
+    for k, v in palette.items():
+        lut[k, :] = v
+    return lut[image]

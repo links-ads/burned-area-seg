@@ -60,10 +60,10 @@ class SingleTaskModule(BaseModule):
         loss_decode = self.criterion_decode(decode_out.squeeze(1), y_del.float())
         loss = loss_decode
 
-        self.log("test_loss", loss, on_epoch=True, logger=True)
+        # self.log("test_loss", loss, on_epoch=True, logger=True)
         for metric_name, metric in self.test_metrics.items():
             metric(decode_out.squeeze(1), y_del.float())
-            self.log(metric_name, metric, on_epoch=True, logger=True)
+            self.log(metric_name, metric, on_epoch=True, logger=True, on_step=False)
         return loss
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:

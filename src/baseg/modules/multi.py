@@ -114,17 +114,17 @@ class MultiTaskModule(BaseModule):
         loss_auxiliary = self.criterion_auxiliary(auxiliary_out, y_lc.long())
         loss = loss_decode + self.aux_factor * loss_auxiliary
 
-        self.log("test_loss_del", loss_decode, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_loss_aux", loss_auxiliary, on_step=True, on_epoch=True, prog_bar=True, logger=True)
-        self.log("test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_loss_del", loss_decode, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_loss_aux", loss_auxiliary, on_step=True, on_epoch=True, prog_bar=True, logger=True)
+        # self.log("test_loss", loss, on_step=True, on_epoch=True, prog_bar=True, logger=True)
         # compute delineation metrics
         for metric_name, metric in self.test_metrics.items():
             metric(decode_out.squeeze(1), y_del.float())
-            self.log(metric_name, metric, on_epoch=True, prog_bar=True)
+            self.log(metric_name, metric, on_epoch=True, prog_bar=True, on_step=False)
         # compute auxiliary metrics
         for metric_name, metric in self.test_metrics_aux.items():
             metric(auxiliary_out, y_lc.long())
-            self.log(metric_name, metric, on_epoch=True, prog_bar=True)
+            self.log(metric_name, metric, on_epoch=True, prog_bar=True, on_step=False)
         return loss
 
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
