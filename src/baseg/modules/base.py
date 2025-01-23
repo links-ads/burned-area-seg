@@ -16,6 +16,8 @@ class BaseModule(LightningModule):
         config: dict,
         tiler: Optional[Callable] = None,
         predict_callback: Optional[Callable] = None,
+        task: str = "binary",
+        num_classes: int = None,
     ):
         super().__init__()
         self.model = build_model(config)
@@ -24,20 +26,20 @@ class BaseModule(LightningModule):
         self.predict_callback = predict_callback
         self.train_metrics = nn.ModuleDict(
             {
-                "train_f1": F1Score(task="binary", ignore_index=255, average="macro"),
-                "train_iou": JaccardIndex(task="binary", ignore_index=255, average="macro"),
+                "train_f1": F1Score(task=task, ignore_index=255, average="macro", num_classes=num_classes),
+                "train_iou": JaccardIndex(task=task, ignore_index=255, average="macro", num_classes=num_classes),
             }
         )
         self.val_metrics = nn.ModuleDict(
             {
-                "val_f1": F1Score(task="binary", ignore_index=255, average="macro"),
-                "val_iou": JaccardIndex(task="binary", ignore_index=255, average="macro"),
+                "val_f1": F1Score(task=task, ignore_index=255, average="macro", num_classes=num_classes),
+                "val_iou": JaccardIndex(task=task, ignore_index=255, average="macro", num_classes=num_classes),
             }
         )
         self.test_metrics = nn.ModuleDict(
             {
-                "test_f1": F1Score(task="binary", ignore_index=255, average="macro"),
-                "test_iou": JaccardIndex(task="binary", ignore_index=255, average="macro"),
+                "test_f1": F1Score(task=task, ignore_index=255, average="macro", num_classes=num_classes),
+                "test_iou": JaccardIndex(task=task, ignore_index=255, average="macro", num_classes=num_classes),
             }
         )
 
