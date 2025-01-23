@@ -166,3 +166,9 @@ EMSR365_AOI01_03_diff.png
 EMSR368_AOI01_01_diff.png
 EMSR371_AOI01_01_diff.png
 EMSR372_AOI04_01_diff.png
+comparisons
+outputs_severity
+*.png
+*.ipynb
+outputs_dnbr
+outputs_regression
