@@ -8,11 +8,12 @@ from mmengine import Config
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger, CSVLogger
-from baseg.datamodules import EMSDataModule, EFFISDataModule
+from baseg.datamodules import EFFISDataModule
 from baseg.io import read_raster_profile, write_raster
-from baseg.modules import MultiTaskModule, SingleTaskModule
+from baseg.modules import SingleTaskRegressionModule
 from baseg.tiling import SmoothTiler
 from baseg.utils import exp_name_timestamp, find_best_checkpoint
+from baseg.modules.unet import UnetModule
 import logging
 
 cli = ArgParser()
@@ -35,29 +36,17 @@ def train(
 
     # datamodule
     log.info("Preparing the data module...")
-    dataset = config["dataset"] if "dataset" in config else "ems"
-    assert dataset in ["ems", "effis"], f"Unknown dataset type: {dataset}"
-    if dataset == "ems":
-        datamodule = EMSDataModule(**config["data"])
-        modalities = config["data"]["modalities"]
-        gt_label = "DEL" if "DEL" in modalities else "GRA"
-        img_label = "S2L2A"
-    else:
-        datamodule = EFFISDataModule(**config["data"])
-        modalities = config["data"]["modalities"]
-        gt_label = "mask" if "mask" in modalities else "dNBR"
-        img_label = "post"
+    datamodule = EFFISDataModule(**config["data"])
+    modalities = config["data"]["modalities"]
+    gt_label = "mask" if "mask" in modalities else "dNBR"
+    img_label = "post"
 
         
     log_dir = config["log_dir"] if "log_dir" in config else "outputs"
     # prepare the model
     log.info("Preparing the model...")
     model_config = config["model"]
-    loss = config["loss"] if "loss" in config else "bce"
-    severity = config["severity"] if "severity" in config else False
-    module_class = MultiTaskModule if "aux_classes" in model_config["decode_head"] else SingleTaskModule
-    module = module_class(model_config, loss=loss, severity=severity, mask_lc=config["mask_lc"], img_label=img_label, gt_label=gt_label) if "mask_lc" in config else module_class(model_config, loss=loss, severity=severity, img_label=img_label, gt_label=gt_label) 
-    module.init_pretrained()
+    module = UnetModule(n_channels=model_config["n_channels"], n_classes=model_config["n_classes"], img_label=img_label, gt_label=gt_label) 
 
     log.info("Preparing the trainer...")
     logger = TensorBoardLogger(save_dir=log_dir, name=exp_name)
@@ -103,29 +92,17 @@ def test(
 
     # datamodule
     log.info("Preparing the data module...")
-    dataset = config["dataset"] if "dataset" in config else "ems"
-    assert dataset in ["ems", "effis"], f"Unknown dataset type: {dataset}"
-    if dataset == "effis":
-        datamodule = EFFISDataModule(**config["data"])
-        modalities = config["data"]["modalities"]
-        gt_label = "mask" if "mask" in modalities else "dNBR"
-        img_label = "post"
-    else:
-        datamodule = EMSDataModule(**config["data"])
-        modalities = config["data"]["modalities"]
-        gt_label = "DEL" if "DEL" in modalities else "GRA"
-        img_label = "S2L2A"
+    datamodule = EFFISDataModule(**config["data"])
+    modalities = config["data"]["modalities"]
+    gt_label = "mask" if "mask" in modalities else "dNBR"
+    img_label = "post"
         
     
     
     # prepare the model
     checkpoint = checkpoint or find_best_checkpoint(models_path, "val_loss", "min")
     log.info(f"Using checkpoint: {checkpoint}")
-    
     module_opts = dict(config=config["model"])
-    loss = config["loss"] if "loss" in config else "bce"
-    severity = config["severity"] if "severity" in config else False
-    module_opts.update( loss=loss, severity=severity)
     if predict:
         tiler = SmoothTiler(
             tile_size=config["data"]["patch_size"],
@@ -133,15 +110,15 @@ def test(
             channels_first=True,
             mirrored=False,
         )
-        output_path = exp_path / "predictions" / "effis" if dataset == "effis" else exp_path / "predictions"
+        output_path = exp_path / "predictions"
         output_path.mkdir(parents=True, exist_ok=True)
-        inference_fn = partial(process_inference, output_path=output_path, img_label = "post" if dataset == "effis" else "S2L2A", is_effis = True if dataset == "effis" else False, is_severity=severity)
+        inference_fn = partial(process_inference, output_path=output_path, img_label = "post", is_effis = True)
         module_opts.update(tiler=tiler, predict_callback=inference_fn)
 
     # prepare the model
     log.info("Preparing the model...")
     model_config = config["model"]
-    module_class = MultiTaskModule if "aux_classes" in model_config["decode_head"] else SingleTaskModule
+    module_class = SingleTaskRegressionModule
     module = module_class.load_from_checkpoint(checkpoint, **module_opts, img_label=img_label, gt_label=gt_label)
     log_dir = config["log_dir"] if "log_dir" in config else "outputs"
     logger1 = TensorBoardLogger(save_dir=log_dir, name=config["name"], version=exp_path.stem)
@@ -200,16 +177,12 @@ def test_multi(
 def process_inference(
     batch: dict,
     output_path: Path,
-    img_label: str = "S2L2A",
-    is_effis: bool = False,
-    is_severity: bool = False
+    img_label: str = "post",
+    is_effis: bool = True,
 ):
     assert output_path.exists(), f"Output path does not exist: {output_path}"
     # for binary segmentation
-    if is_severity:
-        prediction = batch["pred"].int().unsqueeze(0)
-    else:
-        prediction = (batch["pred"] > 0.5).int().unsqueeze(0)
+    prediction = (batch["pred"] > 0.5).int().unsqueeze(0)
     prediction = prediction.cpu().numpy()
     # store the prediction as a GeoTIFF, reading the spatial information from the input image
     
